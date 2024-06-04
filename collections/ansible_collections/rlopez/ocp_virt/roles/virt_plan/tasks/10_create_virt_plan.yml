@@ -1,3 +1,11 @@
+---
+- name: Create the target namespace "{{ migration_target_namespace }}"
+  kubernetes.core.k8s:
+    namespace: "{{ migration_target_namespace }}"
+    state: present
+    validate:
+      fail_on_error: no
+
 - name: Build a list of all the folders
   vmware.vmware_rest.vcenter_folder_info:
   register: all_folders
