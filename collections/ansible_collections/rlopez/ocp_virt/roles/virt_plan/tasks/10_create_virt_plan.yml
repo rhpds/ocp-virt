@@ -130,7 +130,7 @@
           source:
             name: vmware
             namespace: "{{ migration_namespace }}"
-        targetNamespace: "{{ migration_namespace }}"
+        targetNamespace: "{{ migration_target_namespace }}"
         vms: "{{ vms_for_plan_spec }}"
         warm: false
 
