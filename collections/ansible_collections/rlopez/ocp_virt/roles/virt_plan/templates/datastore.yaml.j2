@@ -1,0 +1,22 @@
+---
+apiVersion: forklift.konveyor.io/v1beta1
+kind: StorageMap
+metadata:
+  name: "{{ storagemap_name }}"
+  namespace: "{{ migration_namespace }}" # openshift-mtv
+spec:
+  map:
+{% for value in all_the_datastores.value %}
+    - destination:
+        storageClass: ocs-storagecluster-ceph-rbd
+      source:
+        id: {{ value.datastore }}
+{% endfor %}
+
+  provider:
+    destination:
+      name: host
+      namespace: "{{ migration_namespace }}"
+    source:
+      name: vmware
+      namespace: "{{ migration_namespace }}"
