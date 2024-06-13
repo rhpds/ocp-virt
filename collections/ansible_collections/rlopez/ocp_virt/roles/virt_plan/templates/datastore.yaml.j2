@@ -8,7 +8,7 @@ spec:
   map:
 {% for value in all_the_datastores.value %}
     - destination:
-        storageClass: "{{ default_storage_classes | map(attribute='metadata.name') | join(', ') }}"
+        storageClass: "{{ default_storage_class }}"
       source:
         id: {{ value.datastore }}
 {% endfor %}
