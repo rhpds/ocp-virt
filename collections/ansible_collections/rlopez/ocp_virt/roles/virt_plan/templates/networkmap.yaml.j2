@@ -1,16 +1,16 @@
 ---
 apiVersion: forklift.konveyor.io/v1beta1
-kind: StorageMap
+kind: NetworkMap
 metadata:
-  name: "{{ storagemap_name }}"
-  namespace: "{{ migration_namespace }}" # openshift-mtv
+  name: "{{ networkmap_name }}"
+  namespace: "{{ migration_namespace }}"
 spec:
   map:
-{% for ds_name in datastore_names %}
+{% for net_name in network_names %}
     - destination:
-        storageClass: "{{ default_storage_class }}"
+        type: pod
       source:
-        name: {{ ds_name }}
+        name: {{ net_name }}
 {% endfor %}
 
   provider:
