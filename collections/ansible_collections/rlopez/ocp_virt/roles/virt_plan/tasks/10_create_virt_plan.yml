@@ -98,6 +98,28 @@
 #           source:
 #             name: vmware
 #             namespace: "{{ migration_namespace }}"
+- name: Get storage class information
+  kubernetes.core.k8s_info:
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+  register: storage_classes
+
+- name: Initialize default storage class list
+  set_fact:
+    default_storage_classes: []
+
+- name: Find default storage class(es)
+  set_fact:
+    default_storage_classes: "{{ default_storage_class] }}"
+  loop: "{{ storage_classes.resources }}"
+  when:
+    - item.metadata.annotations is defined
+    - "'storageclass.kubernetes.io/is-default-class' in item.metadata.annotations"
+    - item.metadata.annotations['storageclass.kubernetes.io/is-default-class'] == 'true'
+
+- name: Print default storage class name(s)
+  debug:
+    msg: "Default Storage Class Name(s): {{ default_storage_classes | map(attribute='metadata.name') | join(', ') }}"
 
 - name: Create or update a StorageMap
   kubernetes.core.k8s:
