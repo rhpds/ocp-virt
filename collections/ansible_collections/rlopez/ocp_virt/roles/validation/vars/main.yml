@@ -1,2 +1,8 @@
 ---
 # vars file for validation
+vmware_host: vcsnsx-vc.infra.demo.redhat.com
+migration_namespace: vm
+provider_name: vsphere
+provider_namespace: vm
+vmware_credentials: vsphere-creds
+migration_target_namespace: vm

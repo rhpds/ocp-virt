@@ -53,7 +53,7 @@
       kind: NetworkMap
       metadata:
         name: "{{ networkmap_name }}"
-        namespace: "{{ migration_namespace }}" # openshift-mtv
+        namespace: "{{ migration_namespace }}" # vm
       spec:
         map:
           - destination:
@@ -62,11 +62,11 @@
               id: "{{ portgroup_id }}"
         provider:
           destination:
-            name: host
-            namespace: "{{ migration_namespace }}" # openshift-mtv
+            name: ocpv-local
+            namespace: vm
           source:
-            name: vmware
-            namespace:  "{{ migration_namespace }}" #openshift-mtv
+            name: vsphere
+            namespace: vm
 
 - name: Build a list of all the datastores
   vmware.vmware_rest.vcenter_datastore_info:
@@ -84,7 +84,7 @@
 #       kind: StorageMap
 #       metadata:
 #         name: "{{ storagemap_name }}"
-#         namespace: "{{ migration_namespace }}"
+#         namespace: "{{  }}"
 #       spec:
 #         map:
 #           - destination:
@@ -93,11 +93,11 @@
 #               id: "{{ datastore_id }}"
 #         provider:
 #           destination:
-#             name: host
-#             namespace: "{{ migration_namespace }}"
+#             name: ocpv-local
+#             namespace: "{{  }}"
 #           source:
 #             name: vmware
-#             namespace: "{{ migration_namespace }}"
+#             namespace: "{{  }}"
 
 - name: Get storage class information
   kubernetes.core.k8s_info:
@@ -120,7 +120,7 @@
 
 - name: Create or update a StorageMap
   kubernetes.core.k8s:
-    namespace: "{{ migration_namespace }}"
+    namespace: vm
     definition: "{{ lookup('template', 'datastore.yaml.j2' ) | from_yaml }}"
     state: present
 
@@ -132,24 +132,24 @@
       kind: Plan
       metadata:
         name: "{{ plan_name }}"
-        namespace: "{{ migration_namespace }}"
+        namespace: vm
       spec:
         archived: false
         description: ''
         map:
           network:
             name: "{{ networkmap_name }}"
-            namespace: "{{ migration_namespace }}"
+            namespace: vm
           storage:
             name: "{{ storagemap_name }}"
-            namespace: "{{ migration_namespace }}"
+            namespace: vm
         provider:
           destination:
-            name: host
-            namespace: "{{ migration_namespace }}"
+            name: ocpv-local
+            namespace: vm
           source:
-            name: vmware
-            namespace: "{{ migration_namespace }}"
+            name: vsphere
+            namespace: vm
         targetNamespace: "{{ migration_target_namespace }}"
         vms: "{{ vms_for_plan_spec }}"
         warm: false
@@ -158,12 +158,12 @@
   kubernetes.core.k8s:
     api_version: forklift.konveyor.io/v1beta1
     kind: Migration
-    namespace: "{{ migration_namespace }}"
+    namespace: vm
     name: "{{ plan_name }}"
     definition:
       metadata:
         name: "{{ plan_name }}"
-        namespace: "{{ migration_namespace }}"
+        namespace: vm
       spec:
         plan:
           name: "{{ plan_name }}"

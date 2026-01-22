@@ -5,14 +5,15 @@
       apiVersion: forklift.konveyor.io/v1beta1
       kind: Provider
       metadata:
-        name: "{{ provider_name }}"
-        namespace: "{{ provider_namespace }}"
+        name: vsphere
+        namespace: vm
       spec:
         secret:
-          name: "{{ vmware_credentials }}"
-          namespace: "{{ provider_namespace }}"
+          name: vsphere-creds
+          namespace: vm
         settings:
-          vddkInitImage: 'image-registry.openshift-image-registry.svc:5000/openshift/vddk:latest'
+          sdkEndpoint: vcenter
+          vddkInitImage: 'quay.io/wmarx/vddk:latest'
         type: vsphere
-        url: 'https://{{ vmware_host }}/sdk'
+        url: 'https://vcsnsx-vc.infra.demo.redhat.com/sdk' 
 

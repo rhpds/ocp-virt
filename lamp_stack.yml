@@ -1,6 +1,6 @@
 ---
 - name: Install LAMP Stack on RHEL 9
-  hosts: all
+  hosts: "{{ install_lamp_stack }}"
   become: true
 
   tasks:
