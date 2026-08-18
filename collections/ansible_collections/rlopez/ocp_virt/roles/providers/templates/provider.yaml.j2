@@ -10,8 +10,5 @@ spec:
     namespace: "{{ provider_namespace }}"
   settings:
     sdkEndpoint: vcenter
-{% if use_vddk %}
-    vddkInitImage: 'image-registry.openshift-image-registry.svc:5000/openshift/vddk:latest'
-{% endif %}
   type: vsphere
   url: "https://{{ vmware_host }}/sdk"
