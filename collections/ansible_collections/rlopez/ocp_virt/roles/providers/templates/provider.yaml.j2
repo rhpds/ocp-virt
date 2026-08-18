@@ -1,0 +1,14 @@
+---
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Provider
+metadata:
+  name: "{{ provider_name }}"
+  namespace: "{{ provider_namespace }}"
+spec:
+  secret:
+    name: "{{ vmware_credentials }}"
+    namespace: "{{ provider_namespace }}"
+  settings:
+    sdkEndpoint: vcenter
+  type: vsphere
+  url: "https://{{ vmware_host }}/sdk"

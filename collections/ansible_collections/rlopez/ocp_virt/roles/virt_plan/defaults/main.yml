@@ -4,3 +4,5 @@ random_suffix_network: "{{ lookup('community.general.random_string', length=5, s
 random_suffix_storage: "{{ lookup('community.general.random_string', length=5, special=false, upper=false) }}"
 migration_namespace: "openshift-mtv"
 migration_target_namespace: "openshift-mtv"
+network_names:
+  - segment-migrating-to-ocpvirt

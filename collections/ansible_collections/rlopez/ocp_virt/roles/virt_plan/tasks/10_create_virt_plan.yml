@@ -1,103 +1,70 @@
 ---
-- name: Build a list of all the folders
-  vmware.vmware_rest.vcenter_folder_info:
-  register: all_folders
-
-- name: Filter VM folders
-  ansible.builtin.set_fact:
-    vm_folders: "{{ all_folders.value | selectattr('type', 'equalto', 'VIRTUAL_MACHINE') | list }}"
-
-- name: Check each VM folder for VMs
+- name: Look up selected VMs by name
   vmware.vmware_rest.vcenter_vm_info:
-    folders: "{{ item.folder }}"
-  register: vm_folders_with_vms
-  loop: "{{ vm_folders }}"
-  when: vm_folders | length > 0
+    filter_names: "{{ user_selected_vm_names.split('\n') | select | list }}"
+  register: selected_vms
 
-- name: Display VM names and IDs
+- name: Display matched VMs
   ansible.builtin.debug:
     msg: "VM Name: {{ item.name }}, VM ID: {{ item.vm }}"
-  loop: "{{ vm_folders_with_vms.results | map(attribute='value') | flatten }}"
-  when: item | length > 0
+  loop: "{{ selected_vms.value }}"
   loop_control:
     label: "{{ item.name }}"
 
-- name: Collect VM names and IDs
-  ansible.builtin.set_fact:
-    vm_name_id_pairs: "{{ vm_name_id_pairs | default([]) + [{'name': item.name, 'vm': item.vm}] }}"
-  loop: "{{ vm_folders_with_vms.results | map(attribute='value') | flatten }}"
-  when: item | length > 0
-
 - name: Prepare VMs for Plan spec
   ansible.builtin.set_fact:
-    vms_for_plan_spec: "{{ vms_for_plan_spec | default([]) + [{'hooks': [], 'id': vm_id.vm}] }}"
-  loop: "{{ vm_name_id_pairs }}"
+    vms_for_plan_spec: >-
+      {% set vms = [] -%}
+      {% for vm in selected_vms.value -%}
+        {{ vms.append({'id': vm.vm, 'name': vm.name}) | default('', true) -}}
+      {% endfor -%}
+      {{ vms }}
+
+- name: List disks for each selected VM
+  vmware.vmware_rest.vcenter_vm_hardware_disk_info:
+    vm: "{{ item.vm }}"
+  register: vm_disk_lists
+  loop: "{{ selected_vms.value }}"
   loop_control:
-    loop_var: vm_id
-  when: vm_id.name in user_selected_vm_names.split('\n')
+    label: "{{ item.name }}"
 
-- name: Get information for the distributed port group 'segment-migrating-to-ocpvirt'
-  vmware.vmware_rest.vcenter_network_info:
-    filter_types: DISTRIBUTED_PORTGROUP
-  register: my_portgroup
-
-- name: Capture the distrivuted portgroup id to make network mappings
+- name: Build list of VM/disk pairs to query
   ansible.builtin.set_fact:
-    portgroup_id: "{{ my_portgroup.value[0].network }}"
+    vm_disk_pairs: >-
+      {% set pairs = [] -%}
+      {% for result in vm_disk_lists.results -%}
+        {% for disk in result.value -%}
+          {{ pairs.append({'vm': result.item.vm, 'disk': disk.disk}) | default('', true) -}}
+        {% endfor -%}
+      {% endfor -%}
+      {{ pairs }}
+
+- name: Get disk detail for each VM/disk pair
+  vmware.vmware_rest.vcenter_vm_hardware_disk_info:
+    vm: "{{ item.vm }}"
+    disk: "{{ item.disk }}"
+  register: vm_disk_details
+  loop: "{{ vm_disk_pairs }}"
+  loop_control:
+    label: "{{ item.vm }}:{{ item.disk }}"
+
+- name: Extract unique datastore names from VMDK paths
+  ansible.builtin.set_fact:
+    datastore_names: >-
+      {{ vm_disk_details.results
+         | map(attribute='value') | list
+         | map(attribute='backing') | map(attribute='vmdk_file')
+         | map('regex_search', '^\[(.+?)\]', '\1') | map('first')
+         | unique | list }}
+
+- name: Display discovered datastores
+  ansible.builtin.debug:
+    msg: "Datastores: {{ datastore_names }}"
 
 - name: Create or update a NetworkMap
   kubernetes.core.k8s:
     state: present
-    definition:
-      apiVersion: forklift.konveyor.io/v1beta1
-      kind: NetworkMap
-      metadata:
-        name: "{{ networkmap_name }}"
-        namespace: "{{ migration_namespace }}" # openshift-mtv
-      spec:
-        map:
-          - destination:
-              type: pod
-            source:
-              id: "{{ portgroup_id }}"
-        provider:
-          destination:
-            name: host
-            namespace: "{{ migration_namespace }}" # openshift-mtv
-          source:
-            name: vmware
-            namespace:  "{{ migration_namespace }}" #openshift-mtv
-
-- name: Build a list of all the datastores
-  vmware.vmware_rest.vcenter_datastore_info:
-  register: all_the_datastores
-
-# - name: Capture the datastore id
-#   set_fact:
-#     datastore_id: "{{ all_the_datastores.value[0].datastore }}"
-
-# - name: Create or update a StorageMap
-#   kubernetes.core.k8s:
-#     state: present
-#     definition:
-#       apiVersion: forklift.konveyor.io/v1beta1
-#       kind: StorageMap
-#       metadata:
-#         name: "{{ storagemap_name }}"
-#         namespace: "{{ migration_namespace }}"
-#       spec:
-#         map:
-#           - destination:
-#               storageClass: ocs-storagecluster-ceph-rbd
-#             source:
-#               id: "{{ datastore_id }}"
-#         provider:
-#           destination:
-#             name: host
-#             namespace: "{{ migration_namespace }}"
-#           source:
-#             name: vmware
-#             namespace: "{{ migration_namespace }}"
+    definition: "{{ lookup('template', 'networkmap.yaml.j2') | from_yaml }}"
 
 - name: Get storage class information
   kubernetes.core.k8s_info:
@@ -154,13 +121,28 @@
         vms: "{{ vms_for_plan_spec }}"
         warm: false
 
-- name: Create a Migration manifest to run the Plan CR
-  kubernetes.core.k8s:
+- name: Wait for Plan to become Ready
+  kubernetes.core.k8s_info:
     api_version: forklift.konveyor.io/v1beta1
-    kind: Migration
+    kind: Plan
     namespace: "{{ migration_namespace }}"
     name: "{{ plan_name }}"
+  register: plan_status
+  until: >-
+    plan_status.resources | length > 0 and
+    plan_status.resources[0].status.conditions | default([])
+    | selectattr('type', 'equalto', 'Ready')
+    | selectattr('status', 'equalto', 'True')
+    | list | length > 0
+  retries: 30
+  delay: 10
+
+- name: Create a Migration manifest to run the Plan CR
+  kubernetes.core.k8s:
+    state: present
     definition:
+      apiVersion: forklift.konveyor.io/v1beta1
+      kind: Migration
       metadata:
         name: "{{ plan_name }}"
         namespace: "{{ migration_namespace }}"
